@@ -196,15 +196,17 @@ module.exports = function(session) {
 			this.options.schema.columnNames.data
 		];
 
+		var self = this;
 		this.connection.query(sql, params, function(error) {
 
 			if (error) {
-				debug.error('Failed to insert session data.');
-				debug.error(error);
+				debug_error('Failed to insert session data.');
+				debug_error(error);
 				return cb && cb(error);
 			}
-
+			self.emit('setting', session_id);
 			cb && cb();
+
 		});
 	};
 
@@ -266,7 +268,7 @@ module.exports = function(session) {
 			this.options.schema.columnNames.session_id,
 			session_id
 		];
-
+		var self = this;
 		this.connection.query(sql, params, function(error) {
 
 			if (error) {
@@ -274,7 +276,7 @@ module.exports = function(session) {
 				debug.error(error);
 				return cb && cb(error);
 			}
-
+			self.emit('destroy', session_id);
 			cb && cb();
 		});
 	};
@@ -330,6 +332,7 @@ module.exports = function(session) {
 		debug.log('Clearing expired sessions');
 
 		var sql = 'DELETE FROM ?? WHERE ?? < ?';
+		var getQuery = 'SELECT * FROM ?? WHERE ?? < ?';
 
 		var params = [
 			this.options.schema.tableName,
@@ -337,15 +340,33 @@ module.exports = function(session) {
 			Math.round(Date.now() / 1000)
 		];
 
-		this.connection.query(sql, params, function(error) {
+		var self = this;
+
+		var connection = this.connection;
+
+
+		connection.query(getQuery, params, function(error, result) {
 
 			if (error) {
-				debug.error('Failed to clear expired sessions.');
-				debug.error(error);
+				debug_error('Failed to get expired sessions.');
+				debug_error(error);
 				return cb && cb(error);
 			}
 
-			cb && cb();
+			var expiredRows = result;
+
+			connection.query(sql, params, function(error, result) {
+
+				if (error) {
+					debug_error('Failed to clear expired sessions.');
+					debug_error(error);
+					return cb && cb(error);
+				}
+
+				cb && cb();
+
+				self.emit('sessionsExpired', expiredRows)
+			});
 		});
 	};
 
